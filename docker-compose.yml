@@ -1,0 +1,120 @@
+networks:
+  cormery-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redpanda-data:
+  qdrant-data:
+  minio-data:
+
+services:
+  # ---------------------------------------------------------------------
+  # PostgreSQL + TimescaleDB — DB transactionnelle + séries temporelles
+  # ---------------------------------------------------------------------
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: cormery-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cormery
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cormery_dev_only}
+      POSTGRES_DB: cormery
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - cormery-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cormery"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------
+  # Redpanda — bus d'événements (API Kafka, sans ZooKeeper)
+  # Utilisé par : MERCURE -> pipeline, VENUS -> pipeline, Fleet Command
+  # ---------------------------------------------------------------------
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: cormery-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --advertise-pandaproxy-addr=redpanda:8082
+    ports:
+      - "9092:9092"   # Kafka API
+      - "8082:8082"   # HTTP proxy
+      - "9644:9644"   # Admin API
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - cormery-net
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: cormery-redpanda-console
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redpanda
+    networks:
+      - cormery-net
+
+  # ---------------------------------------------------------------------
+  # Redis — cache court terme (résultats OPTIMUS à la demande, rate-limit)
+  # ---------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: cormery-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - cormery-net
+
+  # ---------------------------------------------------------------------
+  # Qdrant — vector DB (Réconciliateur Universal SKU, matching multimodal)
+  # ---------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cormery-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # HTTP API
+      - "6334:6334"   # gRPC API
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - cormery-net
+
+  # ---------------------------------------------------------------------
+  # MinIO — stockage objet compatible S3 (raw data lake pour MERCURE)
+  # ---------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: cormery-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: cormery
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cormery_dev_only}
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    volumes:
+      - minio-data:/data
+    networks:
+      - cormery-net

@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-portfolio",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"portfolio worker\"",
+    "build": "echo \"portfolio worker\"",
+    "typecheck": "echo \"portfolio worker\"",
+    "test": "echo \"portfolio worker\"",
+    "lint": "echo \"portfolio worker\""
+  }
+}

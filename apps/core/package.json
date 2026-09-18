@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/core",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"Core app placeholder — Next.js wiring to be completed\"",
+    "build": "echo \"Core app placeholder\"",
+    "typecheck": "echo \"Core app placeholder\"",
+    "test": "echo \"Core app placeholder\"",
+    "lint": "echo \"Core app placeholder\""
+  }
+}

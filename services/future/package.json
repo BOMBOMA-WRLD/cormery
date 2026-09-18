@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/future",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"Future service\"",
+    "build": "echo \"Future service\"",
+    "typecheck": "echo \"Future service\"",
+    "test": "echo \"Future service\"",
+    "lint": "echo \"Future service\""
+  }
+}

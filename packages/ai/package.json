@@ -1,0 +1,14 @@
+{
+  "name": "@cormery/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "echo \"@cormery/ai\"",
+    "typecheck": "echo \"@cormery/ai\"",
+    "test": "echo \"@cormery/ai\"",
+    "lint": "echo \"@cormery/ai\""
+  }
+}

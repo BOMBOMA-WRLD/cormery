@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-reconciliation",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"reconciliation worker\"",
+    "build": "echo \"reconciliation worker\"",
+    "typecheck": "echo \"reconciliation worker\"",
+    "test": "echo \"reconciliation worker\"",
+    "lint": "echo \"reconciliation worker\""
+  }
+}

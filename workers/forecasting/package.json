@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-forecasting",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"forecasting worker\"",
+    "build": "echo \"forecasting worker\"",
+    "typecheck": "echo \"forecasting worker\"",
+    "test": "echo \"forecasting worker\"",
+    "lint": "echo \"forecasting worker\""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-execution",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"execution worker\"",
+    "build": "echo \"execution worker\"",
+    "typecheck": "echo \"execution worker\"",
+    "test": "echo \"execution worker\"",
+    "lint": "echo \"execution worker\""
+  }
+}

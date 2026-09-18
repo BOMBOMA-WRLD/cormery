@@ -1,0 +1,13 @@
+{
+  "name": "@cormery/opportunity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "echo \"@cormery/opportunity\"",
+    "typecheck": "echo \"@cormery/opportunity\"",
+    "test": "echo \"@cormery/opportunity\"",
+    "lint": "echo \"@cormery/opportunity\""
+  }
+}

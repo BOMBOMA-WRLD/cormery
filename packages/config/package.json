@@ -1,0 +1,13 @@
+{
+  "name": "@cormery/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "echo \"@cormery/config\"",
+    "typecheck": "echo \"@cormery/config\"",
+    "test": "echo \"@cormery/config\"",
+    "lint": "echo \"@cormery/config\""
+  }
+}

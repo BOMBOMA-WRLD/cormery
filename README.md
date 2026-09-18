@@ -21,15 +21,62 @@ Voir `docs/adr/` pour l'historique complet des décisions d'architecture.
 
 ```
 cormery/
-├── apps/                    # Applications exposées
-├── packages/                # Contrats et bibliothèques partagés
-├── services/                # Services métier Iliade et Future
-├── workers/                 # Traitements asynchrones
-├── infrastructure/          # Docker, Terraform, monitoring et déploiement
-├── docs/                    # Références et décisions d'architecture
-├── scripts/                 # Automatisation du dépôt
-├── tests/                   # Tests transverses
-└── .github/                 # Workflows et configuration GitHub
+├── apps/
+│   ├── core/                # Application de pilotage
+│   └── api/                 # Passerelle HTTP
+├── services/
+│   ├── iliade/
+│   └── future/
+├── packages/
+│   ├── config/
+│   ├── types/               # Contrats TypeScript (ex-packages/contracts)
+│   ├── schemas/
+│   ├── database/
+│   ├── cache/
+│   ├── events/
+│   ├── observability/
+│   ├── security/
+│   ├── ai/
+│   ├── geography/
+│   ├── product/
+│   ├── opportunity/
+│   ├── portfolio/
+│   ├── execution/
+│   └── shared/
+├── workers/
+│   ├── ingestion/
+│   ├── reconciliation/
+│   ├── opportunity/
+│   ├── forecasting/
+│   ├── portfolio/
+│   └── execution/
+├── infrastructure/
+│   ├── docker/
+│   ├── postgres/
+│   ├── redis/
+│   ├── monitoring/
+│   ├── security/
+│   └── deployment/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── contract/
+│   ├── e2e/
+│   ├── load/
+│   ├── stress/
+│   ├── security/
+│   ├── data-quality/
+│   └── ai-evaluation/
+├── scripts/
+├── docs/
+│   ├── architecture/
+│   ├── api/
+│   ├── database/
+│   ├── security/
+│   ├── operations/
+│   ├── task-briefs/
+│   └── adr/                 # ADR historiques conservés
+└── .github/workflows/
 ```
 
 ## Démarrage de l'environnement local

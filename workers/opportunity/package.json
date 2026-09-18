@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-opportunity",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"opportunity worker\"",
+    "build": "echo \"opportunity worker\"",
+    "typecheck": "echo \"opportunity worker\"",
+    "test": "echo \"opportunity worker\"",
+    "lint": "echo \"opportunity worker\""
+  }
+}

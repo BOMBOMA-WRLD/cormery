@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/iliade",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"Iliade service\"",
+    "build": "echo \"Iliade service\"",
+    "typecheck": "echo \"Iliade service\"",
+    "test": "echo \"Iliade service\"",
+    "lint": "echo \"Iliade service\""
+  }
+}

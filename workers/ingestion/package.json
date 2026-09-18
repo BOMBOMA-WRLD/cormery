@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/worker-ingestion",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"ingestion worker\"",
+    "build": "echo \"ingestion worker\"",
+    "typecheck": "echo \"ingestion worker\"",
+    "test": "echo \"ingestion worker\"",
+    "lint": "echo \"ingestion worker\""
+  }
+}

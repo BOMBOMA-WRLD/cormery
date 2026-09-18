@@ -1,0 +1,13 @@
+{
+  "name": "@cormery/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "echo \"@cormery/schemas\"",
+    "typecheck": "echo \"@cormery/schemas\"",
+    "test": "echo \"@cormery/schemas\"",
+    "lint": "echo \"@cormery/schemas\""
+  }
+}

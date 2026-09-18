@@ -1,0 +1,12 @@
+{
+  "name": "@cormery/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo \"API placeholder\"",
+    "build": "echo \"API placeholder\"",
+    "typecheck": "echo \"API placeholder\"",
+    "test": "echo \"API placeholder\"",
+    "lint": "echo \"API placeholder\""
+  }
+}

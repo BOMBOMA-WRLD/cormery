@@ -9,6 +9,7 @@
     "dev": "turbo run dev",
     "lint": "eslint .",
     "test": "turbo run test",
+    "test:e2e": "playwright test",
     "typecheck": "turbo run typecheck"
   },
   "keywords": [],

@@ -1,0 +1,14 @@
+{
+  "name": "@cormery/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "echo \"@cormery/types\"",
+    "typecheck": "echo \"@cormery/types\"",
+    "test": "echo \"@cormery/types\"",
+    "lint": "echo \"@cormery/types\""
+  }
+}

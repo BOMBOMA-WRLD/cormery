@@ -20,19 +20,39 @@
  * - `text_generation` et `chat` via `generate()` ;
  * - `tool_calling` : outils transmis et `tool_calls` normalisés, JAMAIS exécutés ;
  * - `structured_output` limité à `json_object`. `json_schema` n'est PAS déclaré
- *   fiable : le support varie selon le modèle demandé, que ce fichier ne
- *   connaît pas, aussi une requête `json_schema` échoue explicitement plutôt
- *   que d'être envoyée en espérant qu'elle soit honorée.
+ *   fiable : le support varie selon le modèle demandé, aussi une requête
+ *   `json_schema` échoue explicitement en `unsupported_capability`.
+ *
+ * Contraintes documentées par Alibaba pour `json_object`, et leur traitement ici :
+ * - « le prompt doit explicitement demander du JSON » : VÉRIFIÉ avant l'envoi
+ *   (voir {@link QwenProvider.ensureJsonInstructionPresent}). Une requête sans
+ *   cette instruction échoue en `invalid_request` avant tout appel réseau.
+ * - « certains modèles en mode thinking refusent ce format » : NON vérifiable
+ *   ici — le contrat `AIGenerationRequest` n'expose aucun contrôle du mode de
+ *   raisonnement, et ce fichier ne connaît pas le comportement par défaut de
+ *   chaque modèle. Un rejet de l'API pour ce motif remonte par le chemin
+ *   d'erreur HTTP normal (voir {@link QwenProvider.classifyStatus}, statut 4xx
+ *   → `invalid_request`) plutôt que d'être silencieusement ignoré.
  *
  * Capacités volontairement NON implémentées : `streaming`, `embeddings`, `vision`.
  * `generateStream()` et `embed()` conservent le comportement `unsupported_capability`
  * hérité de {@link BaseAIProvider} ; un fragment de contenu `image` est refusé
  * explicitement plutôt que transmis en silence.
  *
+ * Statut de disponibilité : la documentation « Supported APIs » actuelle
+ * d'Alibaba Cloud Model Studio pour le mode compatible OpenAI ne liste que
+ * Chat Completions, Responses, Embedding, File, Batch et Conversations — AUCUN
+ * endpoint de listage de modèles ou de health check n'y figure. `getStatus()`
+ * n'invente donc pas d'endpoint et ne déclenche jamais de génération (interdit
+ * par ailleurs) : il rapporte un état fondé uniquement sur la présence de la
+ * configuration (`unknown` si configuré, `unavailable` sinon), jamais une
+ * disponibilité réseau qui ne serait pas réellement vérifiée.
+ *
  * Credentials : la clé API provient exclusivement de la configuration centralisée
- * validée (`config/env.ts`). Elle reste dans un champ privé, n'est jamais retournée,
- * ni placée dans une URL, un message d'erreur, des métadonnées ou un log.
- * Ce fichier n'émet aucun log.
+ * validée (`config/env.ts`), à l'exception d'un mécanisme de test strictement
+ * séparé (voir {@link QwenProviderTestCredential}). Elle reste dans un champ
+ * privé, n'est jamais retournée, ni placée dans une URL, un message d'erreur,
+ * des métadonnées ou un log. Ce fichier n'émet aucun log.
  */
 
 import { envConfig } from '../../../config/env';
@@ -77,26 +97,23 @@ const DEFAULT_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 /** Chemin de génération conversationnelle, relatif à la base compatible OpenAI. */
 const CHAT_COMPLETIONS_PATH = '/chat/completions';
 
-/**
- * Chemin utilisé comme sonde légère par `getStatus()`.
- *
- * Convention générale des API compatibles OpenAI ; sa disponibilité effective
- * sur le mode compatible DashScope n'est pas confirmée par une source faisant
- * autorité au moment de l'écriture (voir remarques de livraison).
- */
-const MODELS_PATH = '/models';
-
 /** Timeout appliqué à `generate()` lorsque la requête n'en fournit pas. */
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-/** Timeout court du contrôle de santé : il ne doit jamais bloquer un appelant. */
-const STATUS_TIMEOUT_MS = 5_000;
-
-/** Durée de validité du dernier statut observé, pour éviter une sonde par appel. */
-const STATUS_CACHE_TTL_MS = 30_000;
-
 /** Longueur maximale d'un détail d'erreur repris de l'API (borne anti-fuite/anti-bruit). */
 const MAX_ERROR_DETAIL_LENGTH = 200;
+
+/**
+ * Motif de détection d'une instruction JSON dans le prompt.
+ *
+ * Pourquoi : Alibaba documente que `response_format: json_object` exige que le
+ * prompt demande explicitement du JSON, faute de quoi l'API peut retourner du
+ * texte libre non structuré. Cette détection est volontairement simple (un mot
+ * entier, insensible à la casse) : il ne s'agit pas de comprendre le prompt,
+ * mais de vérifier une exigence documentée par le fournisseur avant l'appel,
+ * plutôt que de laisser échouer silencieusement en production.
+ */
+const JSON_INSTRUCTION_PATTERN = /\bjson\b/i;
 
 /** Capacités effectivement implémentées par CE fichier. */
 const IMPLEMENTED_CAPABILITIES: readonly AICapability[] = [
@@ -167,22 +184,36 @@ interface QwenChatRequestPayload {
 export type QwenFetch = (input: string, init: RequestInit) => Promise<Response>;
 
 /**
- * Options de construction du provider.
+ * Options de construction du provider, utilisables en production.
  *
- * Toutes sont facultatives : par défaut, la configuration provient exclusivement
- * de `envConfig`. Elles existent pour la testabilité et pour un éventuel usage
- * multi-tenant décidé par une couche supérieure — jamais pour contourner la
- * configuration centralisée.
+ * Volontairement SANS champ de credential : la clé API provient exclusivement
+ * de `config/env.ts`. Un credential de test s'injecte uniquement via le second
+ * paramètre distinct du constructeur, {@link QwenProviderTestCredential} —
+ * jamais via ce type, afin qu'aucun appelant de production ne puisse
+ * contourner la configuration centralisée.
  */
 export interface QwenProviderOptions {
-  /** Clé API ; par défaut `envConfig.QWEN_API_KEY`. Jamais exposée après construction. */
-  readonly apiKey?: string;
   /** Base URL ; par défaut `envConfig.QWEN_BASE_URL`, sinon l'endpoint international officiel. */
   readonly baseUrl?: string;
   /** Timeout appliqué quand la requête n'en précise pas. */
   readonly defaultTimeoutMs?: number;
   /** Transport HTTP ; par défaut le `fetch` global de Node.js. */
   readonly fetchImpl?: QwenFetch;
+}
+
+/**
+ * Credential réservé aux tests, structurellement séparé de
+ * {@link QwenProviderOptions}.
+ *
+ * RÉSERVÉ AUX TESTS UNITAIRES. Ce type existe pour permettre de tester le
+ * provider sans dépendre de `config/env.ts` ni de variables d'environnement
+ * réelles. Aucune couche de production de CORMERY ne doit construire un
+ * provider avec ce second paramètre ; le Provider Manager doit toujours
+ * appeler `new QwenProvider(options)` à un seul argument, laissant le
+ * credential provenir exclusivement d'`envConfig`.
+ */
+export interface QwenProviderTestCredential {
+  readonly apiKey: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -219,10 +250,6 @@ function asFiniteNumber(value: unknown): number | undefined {
 
 /**
  * Valide récursivement qu'une valeur est un JSON sérialisable.
- *
- * Pourquoi une validation plutôt qu'un cast : `JSON.parse` retourne `unknown` et
- * le contrat expose `JsonValue`. Un cast direct masquerait des valeurs non
- * sérialisables (NaN, undefined) dans les sorties structurées.
  *
  * @param value - Valeur à valider.
  * @returns La valeur typée `JsonValue`, ou `undefined` si elle n'est pas sérialisable.
@@ -288,28 +315,32 @@ function truncateDetail(text: string): string {
 /**
  * Provider Qwen.
  *
- * Comportement de `generate()` : traduit une {@link AIGenerationRequest} en appel
- * `POST /compatible-mode/v1/chat/completions`, applique le timeout et
- * l'`AbortSignal` fournis, puis normalise la réponse en {@link AIGenerationResponse}.
- * Toute erreur — réseau, HTTP, contenu inattendu — est convertie en
- * {@link AIProviderError} avec un code normalisé ; aucune erreur brute de
- * transport ne remonte.
+ * Comportement de `generate()` : valide le modèle et, pour `json_object`,
+ * l'instruction JSON du prompt ; traduit la requête en appel
+ * `POST /compatible-mode/v1/chat/completions` ; applique le timeout et
+ * l'`AbortSignal` fournis ; normalise la réponse. Toute erreur — validation,
+ * réseau, HTTP, contenu inattendu — est convertie en {@link AIProviderError}
+ * avec un code normalisé ; aucune erreur brute de transport ne remonte.
  *
- * Comportement de `getStatus()` : sonde légère `GET /models` avec un timeout
- * court, dont le résultat est mémorisé quelques secondes afin qu'un appel fréquent
- * ne déclenche pas une requête réseau à chaque fois. Aucune boucle de health
- * checking permanente n'est démarrée ici, et aucun credential n'apparaît dans le
- * statut retourné.
+ * Comportement de `getStatus()` : AUCUN appel réseau (voir la note de tête de
+ * fichier sur l'absence d'endpoint de santé confirmé). Le statut reflète
+ * uniquement la présence du credential : `unavailable` si absent, `unknown`
+ * sinon — jamais `available`, qui impliquerait une vérification réseau non
+ * effectuée.
  *
- * Concurrence : l'instance est réutilisable par des requêtes simultanées ; aucun
- * état propre à une génération n'est conservé dans un champ.
+ * Concurrence : l'instance est réutilisable par des requêtes simultanées ;
+ * aucun état propre à une génération n'est conservé dans un champ.
  */
 export class QwenProvider extends BaseAIProvider {
   public readonly id: AIProviderId = PROVIDER_ID;
 
   public readonly name: string = PROVIDER_NAME;
 
-  /** Credential, confiné à l'instance. Jamais lu par une méthode publique. */
+  /**
+   * Credential, confiné à l'instance. Jamais lu par une méthode publique.
+   * Provient d'`envConfig` sauf si un {@link QwenProviderTestCredential} a été
+   * fourni au constructeur (usage de test exclusivement).
+   */
   private readonly apiKey: string | undefined;
 
   /** Racine de l'API, normalisée sans slash final. */
@@ -320,18 +351,16 @@ export class QwenProvider extends BaseAIProvider {
   private readonly fetchImpl: QwenFetch;
 
   /**
-   * Dernier statut observé et son échéance. Seul état mutable de la classe :
-   * il ne contient aucune donnée de requête et son écrasement concurrent est sans
-   * conséquence (dernier écrivain gagne).
+   * @param options - Options de production ; la configuration centralisée fait foi par défaut.
+   * @param testCredential - RÉSERVÉ AUX TESTS. Voir {@link QwenProviderTestCredential}.
+   *   Absent en usage normal : le Provider Manager ne doit jamais fournir ce paramètre.
    */
-  private cachedStatus: { readonly status: AIProviderStatus; readonly expiresAt: number } | undefined;
-
-  /**
-   * @param options - Surcharges facultatives ; la configuration centralisée fait foi par défaut.
-   */
-  public constructor(options: QwenProviderOptions = {}) {
+  public constructor(
+    options: QwenProviderOptions = {},
+    testCredential?: QwenProviderTestCredential,
+  ) {
     super();
-    this.apiKey = options.apiKey ?? envConfig.QWEN_API_KEY;
+    this.apiKey = testCredential?.apiKey ?? envConfig.QWEN_API_KEY;
     this.baseUrl = (options.baseUrl ?? envConfig.QWEN_BASE_URL ?? DEFAULT_BASE_URL).replace(
       /\/+$/,
       '',
@@ -348,9 +377,8 @@ export class QwenProvider extends BaseAIProvider {
    * Déclare les capacités réellement supportées par cette implémentation.
    *
    * La liste `models` est volontairement vide : le dépôt ne fournit aucun
-   * registre de modèles Qwen faisant autorité, et déclarer des identifiants
-   * ou des fenêtres de contexte de mémoire reviendrait à inventer des limites.
-   * Le modèle est donc toujours celui transmis par la requête.
+   * registre de modèles Qwen faisant autorité. Le modèle est donc toujours
+   * celui transmis par la requête.
    *
    * @returns Capacités déclarées, sans aucune donnée sensible.
    */
@@ -364,20 +392,38 @@ export class QwenProvider extends BaseAIProvider {
   }
 
   /**
-   * Contrôle l'état de disponibilité du provider.
+   * Rapporte l'état de disponibilité connu du provider.
    *
-   * @param signal - Signal d'annulation optionnel.
-   * @returns Statut courant, éventuellement issu du cache court.
+   * AUCUN appel réseau n'est effectué : aucun endpoint de santé non
+   * générateur n'est documenté par Alibaba pour cette intégration (voir la
+   * note de tête de fichier). Le statut retourné est donc fondé uniquement
+   * sur la configuration :
+   * - `unavailable` si le credential n'est pas configuré ;
+   * - `unknown` s'il l'est — la disponibilité réelle de l'API n'est pas vérifiée ici.
+   *
+   * @param _signal - Non utilisé : aucune opération asynchrone annulable n'est effectuée.
+   * @returns Statut fondé sur la configuration uniquement.
    */
-  public async getStatus(signal?: AbortSignal): Promise<AIProviderStatus> {
-    const cached = this.cachedStatus;
-    if (cached !== undefined && cached.expiresAt > Date.now()) {
-      return cached.status;
+  public getStatus(_signal?: AbortSignal): Promise<AIProviderStatus> {
+    const checkedAt = new Date().toISOString();
+
+    if (this.apiKey === undefined) {
+      return Promise.resolve({
+        providerId: this.id,
+        state: 'unavailable',
+        checkedAt,
+        reason: 'Qwen API credential is not configured.',
+      });
     }
 
-    const status = await this.probeStatus(signal);
-    this.cachedStatus = { status, expiresAt: Date.now() + STATUS_CACHE_TTL_MS };
-    return status;
+    return Promise.resolve({
+      providerId: this.id,
+      state: 'unknown',
+      checkedAt,
+      reason:
+        'No non-generating health endpoint is documented for this integration; ' +
+        'availability reflects configuration only, not live connectivity.',
+    });
   }
 
   /**
@@ -385,8 +431,9 @@ export class QwenProvider extends BaseAIProvider {
    *
    * @param request - Requête normalisée CORMERY.
    * @returns Réponse normalisée CORMERY.
-   * @throws {AIProviderError} Configuration absente, capacité non supportée,
-   *         erreur HTTP, timeout, annulation ou réponse inexploitable.
+   * @throws {AIProviderError} Configuration absente, requête invalide (modèle
+   *         manquant ou instruction JSON absente pour `json_object`), capacité
+   *         non supportée, erreur HTTP, timeout, annulation ou réponse inexploitable.
    */
   public async generate(request: AIGenerationRequest): Promise<AIGenerationResponse> {
     const apiKey = this.requireApiKey(request.model);
@@ -451,9 +498,6 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Construit les en-têtes de la requête.
    *
-   * Le credential transite uniquement par l'en-tête d'autorisation, jamais par
-   * l'URL. L'objet retourné n'est ni journalisé, ni stocké, ni retourné à l'appelant.
-   *
    * @param apiKey - Credential.
    * @param withBody - `true` si un corps JSON est envoyé.
    * @returns En-têtes minimaux requis par l'API.
@@ -472,14 +516,12 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Transforme la requête CORMERY en charge utile Qwen.
    *
-   * Seuls les champs réellement supportés sont transmis : aucun champ inconnu
-   * n'est relayé à l'API.
-   *
    * @param request - Requête normalisée.
    * @param model - Modèle validé.
    * @returns Charge utile prête à sérialiser.
-   * @throws {AIProviderError} Si `responseFormat` demande `json_schema` (non
-   *         garanti selon le modèle, donc non déclaré fiable par ce fichier).
+   * @throws {AIProviderError} `invalid_request` si `json_object` est demandé
+   *         sans instruction JSON explicite dans le prompt ; `unsupported_capability`
+   *         si `json_schema` est demandé.
    */
   private buildChatPayload(request: AIGenerationRequest, model: string): QwenChatRequestPayload {
     const messages: QwenMessagePayload[] = [];
@@ -490,9 +532,13 @@ export class QwenProvider extends BaseAIProvider {
       messages.push(...this.toQwenMessages(message));
     }
 
+    const responseFormat = this.mapResponseFormat(request.responseFormat);
+    if (responseFormat !== undefined) {
+      this.ensureJsonInstructionPresent(request);
+    }
+
     const tools = this.mapTools(request.tools);
     const toolChoice = this.mapToolChoice(request.toolChoice);
-    const responseFormat = this.mapResponseFormat(request.responseFormat);
 
     return {
       model,
@@ -507,10 +553,43 @@ export class QwenProvider extends BaseAIProvider {
   }
 
   /**
-   * Convertit un message CORMERY en un ou plusieurs messages Qwen.
+   * Vérifie qu'une instruction JSON explicite figure dans le prompt, comme
+   * l'exige Alibaba pour `response_format: json_object`.
    *
-   * Un message porteur de résultats d'outils produit un message Qwen par
-   * résultat, car l'API corrèle chaque résultat à un `tool_call_id` unique.
+   * Détection volontairement simple (présence du mot « json », insensible à
+   * la casse, dans l'instruction système ou un fragment de texte) : ce n'est
+   * pas une compréhension du prompt, seulement la vérification d'une exigence
+   * documentée par le fournisseur, avant d'engager un appel réseau.
+   *
+   * @param request - Requête d'origine.
+   * @throws {AIProviderError} `invalid_request` si aucune instruction JSON n'est trouvée.
+   */
+  private ensureJsonInstructionPresent(request: AIGenerationRequest): void {
+    const systemHasJson =
+      request.systemInstruction !== undefined &&
+      JSON_INSTRUCTION_PATTERN.test(request.systemInstruction);
+
+    const messagesHaveJson = request.messages.some((message) =>
+      message.content.some(
+        (part) => part.type === 'text' && JSON_INSTRUCTION_PATTERN.test(part.text),
+      ),
+    );
+
+    if (!systemHasJson && !messagesHaveJson) {
+      throw new AIProviderError({
+        code: 'invalid_request',
+        providerId: this.id,
+        message:
+          'Qwen requires the prompt to explicitly instruct the model to output JSON ' +
+          'when response_format is "json_object".',
+        model: request.model,
+        retryable: false,
+      });
+    }
+  }
+
+  /**
+   * Convertit un message CORMERY en un ou plusieurs messages Qwen.
    *
    * @param message - Message normalisé.
    * @returns Messages Qwen équivalents.
@@ -574,9 +653,6 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Erreur de garde pour un fragment de contenu inconnu.
    *
-   * Pourquoi : si le contrat s'enrichit d'un nouveau type de fragment, ce provider
-   * doit échouer explicitement plutôt que perdre silencieusement du contenu.
-   *
    * @param part - Fragment non reconnu.
    * @returns Erreur normalisée.
    */
@@ -624,9 +700,7 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * @param format - Format demandé.
    * @returns Format Qwen équivalent, ou `undefined` pour le format textuel implicite.
-   * @throws {AIProviderError} `unsupported_capability` pour `json_schema` : son
-   *         support dépend du modèle demandé, que ce fichier ne connaît pas ;
-   *         il n'est donc jamais déclaré fiable ni envoyé en espérant qu'il soit honoré.
+   * @throws {AIProviderError} `unsupported_capability` pour `json_schema`.
    */
   private mapResponseFormat(
     format: AIResponseFormat | undefined,
@@ -642,10 +716,6 @@ export class QwenProvider extends BaseAIProvider {
 
   /**
    * Exécute une requête HTTP en appliquant timeout et annulation coopérative.
-   *
-   * Le timeout interrompt réellement la requête via `AbortController` ; le signal
-   * de l'appelant est relayé au même contrôleur afin qu'une annulation externe
-   * ne laisse pas la requête se poursuivre.
    *
    * @param path - Chemin relatif à la base configurée.
    * @param init - Méthode, en-têtes et corps.
@@ -698,9 +768,6 @@ export class QwenProvider extends BaseAIProvider {
 
   /**
    * Normalise une défaillance de transport.
-   *
-   * L'erreur d'origine n'est jamais relayée : elle peut contenir l'URL, les
-   * en-têtes ou le corps de la requête.
    *
    * @param error - Erreur brute (ignorée volontairement).
    * @param timedOut - `true` si le timeout interne a déclenché l'annulation.
@@ -773,9 +840,6 @@ export class QwenProvider extends BaseAIProvider {
 
   /**
    * Convertit une réponse HTTP en échec normalisé.
-   *
-   * Seuls le statut, un délai de réessai conseillé et un détail textuel borné
-   * sont conservés ; ni en-têtes de requête, ni credential, ni corps complet.
    *
    * @param response - Réponse en échec.
    * @param model - Modèle concerné.
@@ -873,10 +937,6 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Normalise la réponse Qwen dans le contrat CORMERY.
    *
-   * La structure brute du fournisseur n'est jamais exposée : seuls les champs du
-   * contrat sont retournés, et les valeurs absentes restent absentes plutôt que
-   * d'être estimées.
-   *
    * @param body - Corps décodé.
    * @param request - Requête d'origine (format de sortie demandé).
    * @param model - Modèle demandé, utilisé en repli.
@@ -948,8 +1008,6 @@ export class QwenProvider extends BaseAIProvider {
   /**
    * Normalise les appels d'outil demandés par le modèle.
    *
-   * Ce provider ne les exécute jamais : il les retourne pour la couche supérieure.
-   *
    * @param toolCalls - Champ `tool_calls` brut.
    * @param model - Modèle concerné.
    * @returns Appels normalisés, ou `undefined` si aucun.
@@ -1010,10 +1068,6 @@ export class QwenProvider extends BaseAIProvider {
    * Décode le contenu comme sortie structurée lorsqu'un format `json_object` a
    * été demandé.
    *
-   * Un contenu annoncé comme JSON mais non décodable ne provoque pas d'échec :
-   * `structured` reste absent et `content` demeure disponible. La validation
-   * métier appartient aux couches supérieures.
-   *
    * @param content - Texte généré.
    * @param format - Format demandé.
    * @returns Valeur structurée, ou `undefined`.
@@ -1041,8 +1095,6 @@ export class QwenProvider extends BaseAIProvider {
 
   /**
    * Normalise la consommation en tokens.
-   *
-   * Une valeur absente reste absente : aucune estimation n'est fabriquée.
    *
    * @param usage - Champ `usage` brut.
    * @returns Usage normalisé, ou `undefined` si aucune donnée exploitable.
@@ -1083,67 +1135,6 @@ export class QwenProvider extends BaseAIProvider {
         return 'error';
       default:
         return 'other';
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /*  Contrôle de santé                                                  */
-  /* ------------------------------------------------------------------ */
-
-  /**
-   * Sonde l'API sans déclencher de génération.
-   *
-   * @param signal - Signal d'annulation optionnel.
-   * @returns Statut observé.
-   */
-  private async probeStatus(signal?: AbortSignal): Promise<AIProviderStatus> {
-    const checkedAt = new Date().toISOString();
-
-    if (this.apiKey === undefined) {
-      return {
-        providerId: this.id,
-        state: 'unavailable',
-        checkedAt,
-        reason: 'Qwen API credential is not configured.',
-      };
-    }
-
-    const startedAt = performance.now();
-    try {
-      const response = await this.send(
-        MODELS_PATH,
-        { method: 'GET', headers: this.buildHeaders(this.apiKey, false) },
-        STATUS_TIMEOUT_MS,
-        signal,
-      );
-      const latencyMs = Math.round(performance.now() - startedAt);
-
-      if (response.ok) {
-        return { providerId: this.id, state: 'available', checkedAt, latencyMs };
-      }
-      if (response.status === 429) {
-        return {
-          providerId: this.id,
-          state: 'degraded',
-          checkedAt,
-          latencyMs,
-          reason: 'Rate limited by the Qwen API.',
-        };
-      }
-      return {
-        providerId: this.id,
-        state: 'unavailable',
-        checkedAt,
-        latencyMs,
-        reason: `Health check returned HTTP ${String(response.status)}.`,
-      };
-    } catch (error) {
-      const latencyMs = Math.round(performance.now() - startedAt);
-      const reason =
-        error instanceof AIProviderError && error.code === 'timeout'
-          ? 'Health check timed out.'
-          : 'Health check could not reach the Qwen API.';
-      return { providerId: this.id, state: 'unavailable', checkedAt, latencyMs, reason };
     }
   }
 }

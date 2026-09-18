@@ -57,3 +57,13 @@
     "zustand": "^5.0.15"
   }
 }
+
+{
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}
+
+

@@ -1088,7 +1088,7 @@ export class MistralProvider extends BaseAIProvider {
       case 'tool_calls':
         return 'tool_calls';
       case 'content_filter':
-ùù        return 'content_filter';
+         return 'content_filter';
       case 'error':
         return 'error';
       default:

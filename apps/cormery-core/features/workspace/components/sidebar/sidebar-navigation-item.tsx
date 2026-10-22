@@ -1,0 +1,3 @@
+import type {NavigationItem} from '../../types/navigation.types';
+import {NavigationTooltip} from '../shared/navigation-tooltip';
+export function SidebarNavigationItem({item,active,collapsed,onSelect}:{item:NavigationItem;active:boolean;collapsed:boolean;onSelect:(id:NavigationItem['id'])=>void}){return <button type="button" className={`nav-item${active?' active':''}`} aria-current={active?'page':undefined} aria-label={collapsed?item.label:undefined} title={collapsed?undefined:item.description} onClick={()=>onSelect(item.id)}><NavigationTooltip label={item.label}><span className="nav-icon" aria-hidden="true">{item.icon}</span></NavigationTooltip><span className="nav-label">{item.label}</span></button>;}

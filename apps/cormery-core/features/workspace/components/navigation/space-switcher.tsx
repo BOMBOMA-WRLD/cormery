@@ -1,0 +1,2 @@
+import type {WorkspaceSpace} from '../../types/spaces.types';
+export function SpaceSwitcher({activeSpace,open,onToggle}:{activeSpace:WorkspaceSpace;open:boolean;onToggle:()=>void}){return <button className="space-trigger" type="button" aria-expanded={open} onClick={onToggle}><span className="space-avatar" aria-hidden="true">{activeSpace.name.slice(0,1)}</span><span className="space-copy"><strong>{activeSpace.name}</strong><small>{activeSpace.description}</small></span><span aria-hidden="true">⌄</span></button>;}

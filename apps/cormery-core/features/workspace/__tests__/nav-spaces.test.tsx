@@ -1,0 +1,2 @@
+import assert from 'node:assert/strict';import test from 'node:test';import {createElement} from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {SpaceSwitcher} from '../components/navigation/space-switcher';import {WORKSPACE_SPACES} from '../config/spaces.config';
+test('space switcher labels active space and expanded state',()=>{const html=renderToStaticMarkup(createElement(SpaceSwitcher,{activeSpace:WORKSPACE_SPACES[0],open:false,onToggle:()=>undefined}));assert.match(html,/Global Workspace/);assert.match(html,/aria-expanded="false"/);});

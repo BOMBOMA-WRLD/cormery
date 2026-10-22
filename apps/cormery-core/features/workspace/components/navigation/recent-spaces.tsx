@@ -1,0 +1,2 @@
+import type {WorkspaceSpace} from '../../types/spaces.types';
+export function RecentSpaces({spaces}:{spaces:WorkspaceSpace[]}){const recent=spaces.filter((space)=>space.kind==='recent');return <section className="space-subsection" aria-label="Espaces récents"><h3>Espaces récents</h3><p>{recent.length?recent.map((space)=>space.name).join(', '):'Historique indisponible sans service de persistance.'}</p></section>;}

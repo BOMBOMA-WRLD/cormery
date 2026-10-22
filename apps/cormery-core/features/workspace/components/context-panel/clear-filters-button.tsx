@@ -1,0 +1,1 @@
+export function ClearFiltersButton({disabled,onClear}:{disabled:boolean;onClear:()=>void}){return <button className="text-button" type="button" disabled={disabled} onClick={onClear}>Réinitialiser</button>;}

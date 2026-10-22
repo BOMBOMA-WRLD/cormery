@@ -1,0 +1,2 @@
+import assert from 'node:assert/strict';import test from 'node:test';import {createElement} from 'react';import {renderToStaticMarkup} from 'react-dom/server';import {SidebarNavigation} from '../components/sidebar/sidebar-navigation';
+test('sidebar announces active view',()=>{const html=renderToStaticMarkup(createElement(SidebarNavigation,{activeView:'workspace',collapsed:false,onSelect:()=>undefined}));assert.match(html,/aria-current="page"/);assert.match(html,/Opportunités/);});

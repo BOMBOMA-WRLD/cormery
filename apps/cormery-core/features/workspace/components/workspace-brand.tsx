@@ -1,0 +1,1 @@
+export function WorkspaceBrand(){return <a className="workspace-brand" href="#workspace" aria-label="CORMERY CORE"><span className="workspace-brand-mark" aria-hidden="true"><i/><i/><i/></span><span>CORMERY <em>CORE</em></span></a>;}

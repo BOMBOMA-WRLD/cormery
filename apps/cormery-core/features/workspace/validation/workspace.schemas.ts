@@ -1,0 +1,5 @@
+import {WORKSPACE_VIEWS,type WorkspaceView} from '../types/navigation.types';
+export interface ValidationResult<T>{success:boolean;value?:T;error?:string;}
+export function validateWorkspaceView(value:unknown):ValidationResult<WorkspaceView>{return typeof value==='string'&&WORKSPACE_VIEWS.includes(value as WorkspaceView)?{success:true,value:value as WorkspaceView}:{success:false,error:'Vue Workspace inconnue.'};}
+export function validateSpaceName(value:string):ValidationResult<string>{const name=value.trim();if(name.length<2)return{success:false,error:'Le nom doit contenir au moins 2 caractères.'};if(name.length>60)return{success:false,error:'Le nom ne peut pas dépasser 60 caractères.'};return{success:true,value:name};}
+export function validateNumericFilter(value:string):ValidationResult<string>{if(value.trim()==='')return{success:true,value:''};const n=Number(value);return Number.isFinite(n)&&n>=0&&n<=100?{success:true,value:String(n)}:{success:false,error:'La valeur doit être comprise entre 0 et 100.'};}
